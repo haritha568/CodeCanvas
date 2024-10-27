@@ -649,3 +649,4 @@ export const Canvas = ({ boardId }: CanvasProps) => {
         </main>
     );
 };
+    
