@@ -1,4 +1,3 @@
-"use client";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ToolButton } from "./tool-button";
 import {
@@ -187,19 +186,18 @@ const Toolbar = ({
                     onClick={redo}
                     isDisabled={!canRedo}
                 />
-            </div>
-                <div className="bg-white rounded-md p-1.5 flex flex-col items-center shadow-md">
                 <ToolButton
-                    label="Grid"
+                    label="Toggle Grid"
                     icon={Grid} // Use your grid icon here
                     onClick={toggleGrid} // Call the toggleGrid function on click
                 />
                 <ToolButton
-                    label="Dots"
+                    label="Toggle dots"
                     icon={Grip} // Use your grid icon here
                     onClick={toggleDots} // Call the toggleGrid function on click
                 />
             </div>
+            
         </div>
     );
 };

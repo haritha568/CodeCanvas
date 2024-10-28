@@ -1,0 +1,29 @@
+"use client";
+
+import { ReactNode } from "react";
+import { RoomProvider } from "@liveblocks/react/suspense";
+import { ClientSideSuspense } from "@liveblocks/react";
+
+interface RoomProps {
+    children: ReactNode
+    roomId: string
+}
+
+export const Room = ({
+    children,
+    roomId,
+} : {
+    children: ReactNode
+    roomId: string;
+
+}) => {
+    return(
+        <RoomProvider id = {roomId} initialPresence={{}}>
+                <ClientSideSuspense fallback={<div>Loading</div>}>
+                    {()=> children}
+                </ClientSideSuspense>
+        </RoomProvider>
+    )
+}
+
+http://localhost:3000/board/j57awk3mnn2k7x9s8vjqje17q171fg5d

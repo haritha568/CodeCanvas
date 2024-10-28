@@ -4,7 +4,18 @@
 import { createClient, LiveList, LiveMap,LiveObject } from "@liveblocks/client";
 import { Layer, Color } from "@/types/canvas";
 
-const client = createClient({
+type UserInfo = {
+  name: string;
+  color: string;
+  picture: string;
+};
+
+export type UserAwareness = {
+  user?: UserInfo;
+};
+export type AwarenessList = [number, UserAwareness][];
+
+export const client = createClient({
   throttle: 16,
   authEndpoint: "/api/liveblocks-auth",
 });
