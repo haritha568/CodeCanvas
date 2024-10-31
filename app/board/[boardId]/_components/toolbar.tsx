@@ -23,6 +23,8 @@ interface ToolbarProps {
     redo: () => void;
     canUndo: boolean;
     canRedo: boolean;
+    toggleGrid: () => void; // Add toggleGrid prop
+    toggleDots: () => void;
 }
 
 const Toolbar = ({
@@ -32,6 +34,8 @@ const Toolbar = ({
     redo,
     canUndo,
     canRedo,
+    toggleGrid,
+    toggleDots, // Add toggleGrid to props
 }: ToolbarProps) => {
     const selection = useSelf((me) => me.presence.selection);
 
@@ -181,6 +185,16 @@ const Toolbar = ({
                     icon={Redo2}
                     onClick={redo}
                     isDisabled={!canRedo}
+                />
+                <ToolButton
+                    label="Toggle Grid"
+                    icon={Grid} // Use your grid icon here
+                    onClick={toggleGrid} // Call the toggleGrid function on click
+                />
+                <ToolButton
+                    label="Toggle dots"
+                    icon={Grip} // Use your grid icon here
+                    onClick={toggleDots} // Call the toggleGrid function on click
                 />
             </div>
             

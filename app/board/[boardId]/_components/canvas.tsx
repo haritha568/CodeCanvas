@@ -81,12 +81,20 @@ export const Canvas = ({ boardId }: CanvasProps) => {
         g: 255,
         b: 255,
     });
+    const [showGrid, setShowGrid] = useState(false);
+    const [showDots, setShowDots] = useState(false);
 
     useDisableScrollBounce();
     const history = useHistory();
     const canUndo = useCanUndo();
     const canRedo = useCanRedo();
 
+    const toggleGrid = () => {
+        setShowGrid((prev) => !prev);
+    };
+    const toggleDots = () => {
+        setShowDots((prev) => !prev);
+    };
    
 
     const insertLayer = useMutation(
@@ -560,6 +568,8 @@ export const Canvas = ({ boardId }: CanvasProps) => {
                 canRedo={canRedo}
                 undo={history.undo}
                 redo={history.redo}
+                toggleGrid={toggleGrid}
+                toggleDots={toggleDots}
             />
             {camera.x != 0 && camera.y != 0 && (
                 <ResetCamera resetCamera={resetCamera} />
@@ -584,6 +594,47 @@ export const Canvas = ({ boardId }: CanvasProps) => {
                         transform: `translate(${camera.x}px, ${camera.y}px)`,
                     }}
                 >
+                {showGrid && (
+                        <g className="grid-overlay">
+                            {Array.from({ length: 200 }, (_, i) => (
+                                <line
+                                    key={`v-${i}`}
+                                    x1={i * 50}
+                                    y1={0}
+                                    x2={i * 50}
+                                    y2={5000}
+                                    stroke="black"
+                                    strokeWidth={0.5}
+                                />
+                            ))}
+                            {Array.from({ length: 200 }, (_, i) => (
+                                <line
+                                    key={`h-${i}`}
+                                    x1={0}
+                                    y1={i * 50}
+                                    x2={5000}
+                                    y2={i * 50}
+                                    stroke="black"
+                                    strokeWidth={0.5}
+                                />
+                            ))}
+                        </g>
+                    )}
+                    {showDots && ( // Conditional rendering for dots
+    <g className="dots-overlay">
+        {Array.from({ length: 200 }, (_, rowIndex) => (
+            Array.from({ length: 200 }, (_, colIndex) => (
+                <circle
+                    key={`dot-${rowIndex}-${colIndex}`}
+                    cx={colIndex * 50} // Adjust the spacing as needed
+                    cy={rowIndex * 50} // Adjust the spacing as needed
+                    r={2} // Radius of the dots
+                    fill="black" // Color of the dots
+                />
+            ))
+        ))}
+    </g>   
+                    )}
                     {layerIds.map((layerId) => {
                         return (
                             <LayerPreview
