@@ -1,3 +1,4 @@
+//Users/harithagampala/board-video/app/text-editor/j5797ws8xt4bcb8s5jsv4bmtwx73fh1f/_components/floating-toolbar.tsx
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import { $getSelection, $isRangeSelection, FORMAT_TEXT_COMMAND } from "lexical";
 import { useEffect, useLayoutEffect, useState } from "react";

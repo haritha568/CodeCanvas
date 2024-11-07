@@ -1,3 +1,4 @@
+//Users/harithagampala/board-video/app/text-editor/j5797ws8xt4bcb8s5jsv4bmtwx73fh1f/page.tsx
 //import { Canvas } from "./_components/canvas"
 import { Room } from "@/components/room"
 import { Loading } from "@/components/auth/loading"

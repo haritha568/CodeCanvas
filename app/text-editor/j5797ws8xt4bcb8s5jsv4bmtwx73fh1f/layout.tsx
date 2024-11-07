@@ -1,3 +1,4 @@
+///Users/harithagampala/board-video/app/text-editor/j5797ws8xt4bcb8s5jsv4bmtwx73fh1f/layout.tsx
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
