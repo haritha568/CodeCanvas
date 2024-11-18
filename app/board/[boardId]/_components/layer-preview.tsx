@@ -8,11 +8,20 @@ import { Ellipse } from "./ellipse";
 import { Text } from "./text";
 import { Note } from "./note";
 import { Path } from "./path";
+import  {ArrowTools} from "./arrow-tool";
+import { ArrowRight, ChevronRight, ChevronsRight, ArrowLeftRight, LucideProps } from "lucide-react"; // icons for arrows
 import { colorToCss } from "@/lib/utils";
+import { MouseEventHandler } from "react";
 
 interface LayerPreviewProps {
     id: string;
     onLayerPointerDown: (e: React.PointerEvent, layerId: string) => void;
+    selectionColor?: string;
+}
+interface ArrowLayerProps {
+    icon: React.ComponentType<LucideProps>;
+    onLayerPointerDown: (e: React.PointerEvent<HTMLDivElement>, id: string) => void;
+    id: string;
     selectionColor?: string;
 }
 
@@ -20,6 +29,12 @@ export const LayerPreview = memo(
     ({ id, onLayerPointerDown, selectionColor }: LayerPreviewProps) => {
         const layer = useStorage((root) => root.layers.get(id));
         if (!layer) return null;
+
+        const ArrowLayer = ({ icon: Icon, onLayerPointerDown, id, selectionColor }: ArrowLayerProps) => (
+            <div onPointerDown={(e) => onLayerPointerDown(e, id)}>
+                <Icon size={24} color={selectionColor || "#000"} />
+            </div>
+        );
 
         switch (layer.type) {
             case LayerType.Path:
@@ -69,9 +84,17 @@ export const LayerPreview = memo(
                         selectionColor={selectionColor}
                     />
                 );
-
+                case LayerType.Association: // Solid Arrow Layer
+                return <ArrowLayer icon={ArrowRight} onLayerPointerDown={onLayerPointerDown} id={id} selectionColor={selectionColor} />;
+            case LayerType.Inheritance: // Dashed Arrow Layer
+                return <ArrowLayer icon={ChevronRight} onLayerPointerDown={onLayerPointerDown} id={id} selectionColor={selectionColor} />;
+            case LayerType.Dependency: // Dotted Arrow Layer
+                return <ArrowLayer icon={ChevronsRight} onLayerPointerDown={onLayerPointerDown} id={id} selectionColor={selectionColor} />;
+            case LayerType.Implementation: // Double Arrow for Implementation
+                return <ArrowLayer icon={ArrowLeftRight} onLayerPointerDown={onLayerPointerDown} id={id} selectionColor={selectionColor} />;
             default:
-                console.warn("Unsupported layer type");
+                console.warn(`Unsupported layer type`);
+                return null;
         }
     }
 );
