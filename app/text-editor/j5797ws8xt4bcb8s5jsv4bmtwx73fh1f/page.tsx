@@ -16,7 +16,9 @@ const TextEditorPage = ({
     console.log(params.roomId)
     return (
         <div className="h-screen w-screen">
-            <Room roomId="j5797ws8xt4bcb8s5jsv4bmtwx73fh1f" fallback={<Loading />}>
+            <Room roomId="j5797ws8xt4bcb8s5jsv4bmtwx73fh1f" fallback={<Loading />}
+            history={true}
+            >
                 <Editor />
             </Room>
             

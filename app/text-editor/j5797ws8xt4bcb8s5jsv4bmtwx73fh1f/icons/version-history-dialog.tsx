@@ -1,15 +1,19 @@
 import * as Dialog from "@radix-ui/react-dialog";
-import { Suspense, useCallback, useMemo, useState } from "react";
-import Loading from "./loading";
+import { Suspense, useCallback, useMemo, useState, useEffect } from "react";
 import {
   HistoryVersionSummaryList,
   HistoryVersionSummary,
 } from "@liveblocks/react-ui";
 import { HistoryVersionPreview } from "@liveblocks/react-lexical";
 import { useHistoryVersions } from "@liveblocks/react";
+import { History, X } from "lucide-react";
+import { formatDistanceToNow } from "date-fns";
+import type { HistoryVersion } from "@liveblocks/client";
+import Loading from "../loading";
 
-export default function VersionsDialog() {
+export default function VersionHistoryDialog() {
   const [isOpen, setOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const onVersionRestore = useCallback(() => {
     setOpen(false);
@@ -17,74 +21,126 @@ export default function VersionsDialog() {
 
   return (
     <Dialog.Root open={isOpen} onOpenChange={setOpen}>
-      <Dialog.Trigger className="inline-flex relative items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground w-8 h-8">
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          x="0px"
-          y="0px"
-          width="16"
-          height="16"
-          viewBox="0 0 24 24"
-        >
-          <path
-            fill="currentColor"
-            d="M 12 2 C 6.4889971 2 2 6.4889971 2 12 C 2 17.511003 6.4889971 22 12 22 C 17.511003 22 22 17.511003 22 12 C 22 6.4889971 17.511003 2 12 2 z M 12 4 C 16.430123 4 20 7.5698774 20 12 C 20 16.430123 16.430123 20 12 20 C 7.5698774 20 4 16.430123 4 12 C 4 7.5698774 7.5698774 4 12 4 z M 11 6 L 11 12.414062 L 15.292969 16.707031 L 16.707031 15.292969 L 13 11.585938 L 13 6 L 11 6 z"
-          />
-        </svg>
+      <Dialog.Trigger className="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 h-8 w-8">
+        <History className="h-5 w-5" />
       </Dialog.Trigger>
 
       <Dialog.Portal>
-        <Dialog.Overlay className="bg-black/50 fixed inset-0 cursor-pointer" />
-        <Dialog.Content className="rounded-xl border border-border bg-card text-card-foreground shadow text-sm overflow-hidden fixed top-[50%] left-[50%] h-[85vh] w-[90vw] translate-x-[-50%] translate-y-[-50%] outline-none z-20">
-          <Dialog.Title className="sr-only">Versions</Dialog.Title>
-          <Dialog.Description className="sr-only">
-            Previous versions of this document
-          </Dialog.Description>
-          <Versions onVersionRestore={onVersionRestore} />
+        <Dialog.Overlay className="fixed inset-0 bg-black/50 backdrop-blur-sm transition-all duration-100 data-[state=closed]:animate-out data-[state=closed]:fade-out data-[state=open]:fade-in" />
+        
+        <Dialog.Content className="fixed left-[50%] top-[50%] z-50 grid w-full max-w-5xl translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] rounded-lg">
+          <div className="flex items-center justify-between">
+            <Dialog.Title className="text-lg font-semibold">Version History</Dialog.Title>
+            <Dialog.Close className="rounded-full opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
+              <X className="h-4 w-4" />
+              <span className="sr-only">Close</span>
+            </Dialog.Close>
+          </div>
+
+          {error && (
+            <div className="p-4 text-red-500 bg-red-50 rounded-md">
+              Error: {error} {/* Render the error message */}
+            </div>
+          )}
+
+          <div className="h-[600px] overflow-hidden rounded-md border">
+            <Suspense fallback={<Loading />}>
+              <Versions onVersionRestore={onVersionRestore} setError={setError} />
+            </Suspense>
+          </div>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
   );
 }
 
-function Versions({ onVersionRestore }: { onVersionRestore: () => void }) {
-  const [selectedVersionId, setSelectedVersionId] = useState<string>();
-  const { versions, isLoading } = useHistoryVersions();
+interface VersionsProps {
+  onVersionRestore: () => void;
+  setError: (error: string | null) => void;
+}
+
+function Versions({ onVersionRestore, setError }: VersionsProps) {
+  const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
+  const { versions, isLoading, error } = useHistoryVersions();
+
+  useEffect(() => {
+    console.log("Fetched versions:", versions);
+    console.log("Is loading:", isLoading);
+    console.log("Error:", error);
+
+    if (error) { console.error("Error details:", error); setError(error.message || "An unknown error occurred"); } else { setError(null); }
+  }, [versions, isLoading, error, setError]);
+
   const selectedVersion = useMemo(
     () => versions?.find((version) => version.id === selectedVersionId),
     [selectedVersionId, versions]
   );
 
-  return isLoading ? <Loading /> : versions?.length === 0 ? (
-    <div className="flex h-full items-center justify-center p-6 text-muted-foreground">
-      No versions yet
-    </div>
-  ) : (
-    <div className="flex h-full">
-      <div className="flex-1 h-full min-w-0">
+  const formatTimeAgo = (date: Date) => {
+    return formatDistanceToNow(date, { addSuffix: true });
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex h-full items-center justify-center p-6">
+        <Loading />
+      </div>
+    );
+  }
+
+  if (!versions?.length) { return ( <div className="flex h-full items-center justify-center p-6 text-muted-foreground"> <div className="text-center"> <History className="mx-auto h-12 w-12 opacity-50" /> <p className="mt-2">No versions available yet. Please check back later.</p> <p className="text-sm text-muted-foreground"> Changes will be saved automatically as you edit. </p> </div> </div> ); }
+
+  return (
+    <div className="flex h-full divide-x">
+      <div className="flex-1 min-w-0 h-full">
         {selectedVersion ? (
           <HistoryVersionPreview
             version={selectedVersion}
-            className="w-full h-full"
+            className="w-full h-full p-4"
             onVersionRestore={onVersionRestore}
           />
         ) : (
           <div className="flex h-full items-center justify-center p-6 text-muted-foreground">
-            No version selected
+            <div className="text-center">
+              <History className="mx-auto h-12 w-12 opacity-50" />
+              <p className="mt-2">Select a version to preview</p>
+            </div>
           </div>
         )}
       </div>
-      <div className="text-sm relative w-[250px] h-full overflow-auto border-l border-border/80">
+
+      <div className="w-80 h-full overflow-auto border-l">
+        <div className="p-4 border-b">
+          <h3 className="font-medium">Version History</h3>
+          <p className="text-sm text-muted-foreground">
+            {versions.length} version{versions.length !== 1 ? 's' : ''}
+          </p>
+        </div>
+
         <HistoryVersionSummaryList>
-          {versions?.map((version) => (
+          {versions.map((version: HistoryVersion) => (
             <HistoryVersionSummary
-              onClick={() => {
-                setSelectedVersionId(version.id);
-              }}
               key={version.id}
               version={version}
               selected={version.id === selectedVersionId}
-            />
+              onClick={() => {
+                setSelectedVersionId(version.id);
+              }}
+              className={`p-4 cursor-pointer hover:bg-muted transition-colors ${
+                version.id === selectedVersionId ? 'bg-accent' : ''
+              }`}
+            >
+              <div className="flex items-start gap-3">
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium">
+                    Version {version.id.slice(0, 8)}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    {formatTimeAgo(version.createdAt)}
+                  </p>
+                </div>
+              </div>
+            </HistoryVersionSummary>
           ))}
         </HistoryVersionSummaryList>
       </div>
