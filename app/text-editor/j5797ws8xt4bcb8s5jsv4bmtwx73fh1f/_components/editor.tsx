@@ -1,4 +1,3 @@
-// editor.tsx
 "use client";
 
 import { LexicalComposer } from "@lexical/react/LexicalComposer";
@@ -24,11 +23,23 @@ import { LinkNode } from "@lexical/link";
 import EnhancedToolbar from './toolbar';
 import FloatingToolbar from "./floating-toolbar";
 import SpellCheckPlugin, { Placeholder } from "./spellcheck-plugin";
-import NotificationsPopover from "../notifications-popover";
 import Loading from "../loading";
-import VersionHistoryDialog from "../version-history-dialog";
 import { useThreads } from "@liveblocks/react/suspense";
 import { useIsMobile } from "./use-is-mobile";
+import { MentionsPlugin } from "./mentions-plugin";
+import { useState, useCallback } from 'react';
+import { FormEvent } from 'react';
+
+// Simulated mention detection function
+function detectMentions(text: string) {
+  const mentionPattern = /@(\w+)/g;
+  const mentions = [];
+  let match;
+  while ((match = mentionPattern.exec(text)) !== null) {
+    mentions.push(match[1]);
+  }
+  return mentions;
+}
 
 const initialConfig = liveblocksConfig({
   namespace: "Demo",
@@ -62,7 +73,23 @@ const initialConfig = liveblocksConfig({
 });
 
 export default function Editor() {
+  const [content, setContent] = useState('');
   const status = useEditorStatus();
+  const { threads } = useThreads();
+
+  const handleChange = useCallback((e: FormEvent<HTMLDivElement>) => {
+    const target = e.currentTarget;
+    const newContent = target.innerText;
+    setContent(newContent);
+
+    const mentions = detectMentions(newContent);
+    if (mentions.length > 0) {
+      mentions.forEach(mention => {
+        console.log(`User ${mention} was mentioned.`);
+        // Add logic to create notifications here
+      });
+    }
+  }, []);
 
   return (
     <div className="relative min-h-screen flex flex-col">
@@ -72,10 +99,7 @@ export default function Editor() {
             <Loading />
           ) : (
             <div className="relative flex flex-col h-full">
-              <div className="h-[60px] flex items-center justify-end px-4 border-b border-border/80 bg-background">
-                <VersionHistoryDialog />
-                <h1>hi</h1>
-              </div>
+
 
               <div className="h-auto border-b border-border/80 bg-background">
                 <EnhancedToolbar />
@@ -85,7 +109,10 @@ export default function Editor() {
                 <div className="relative flex flex-1">
                   <RichTextPlugin
                     contentEditable={
-                      <ContentEditable className="outline-none flex-1 transition-all" />
+                      <ContentEditable
+                        className="outline-none flex-1 transition-all"
+                        onInput={handleChange}
+                      />
                     }
                     placeholder={
                       <p className="pointer-events-none absolute top-0 left-0 text-muted-foreground w-full h-full">
@@ -112,6 +139,7 @@ export default function Editor() {
               <ListPlugin />
             </div>
           )}
+          <MentionsPlugin />
         </LiveblocksPlugin>
       </LexicalComposer>
     </div>
