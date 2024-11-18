@@ -2,10 +2,9 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import {
   $getRoot,
-  $getSelection,
+  $getNodeByKey,
   $createRangeSelection,
   $setSelection,
-  $isRangeSelection,
   TextNode,
 } from 'lexical';
 import { Search, ArrowRight, ArrowLeft } from 'lucide-react';
@@ -32,83 +31,71 @@ export function FindReplace({ isOpen, onClose }: { isOpen: boolean; onClose: () 
   const [matches, setMatches] = useState<Match[]>([]);
   const [currentMatchIndex, setCurrentMatchIndex] = useState(-1);
 
-  // Function to get all text nodes from the editor
+  // Get all text nodes more directly
+  // Updated FindReplace component with additional logging
   const getAllTextNodes = useCallback(() => {
     const textNodes: TextNode[] = [];
-    
     editor.getEditorState().read(() => {
       const root = $getRoot();
-
-      const traverseNodes = (node: any) => {
+      
+      const traverseNodes = (node: any) => { // Explicitly define 'node' type here as 'any'
         if (node instanceof TextNode) {
           textNodes.push(node);
+        } else if (node.getChildren) {
+          node.getChildren().forEach(traverseNodes);
         }
-        node.getChildren().forEach(traverseNodes);
       };
-
+      
       traverseNodes(root);
     });
-
+    console.log("All Text Nodes Collected:", textNodes.map(node => node.getTextContent()));
     return textNodes;
   }, [editor]);
 
-  // Improved find function
+  //find all function
   const findAll = useCallback(() => {
-    const searchText = findText.trim().toLowerCase();
-    if (!searchText) {
+    const searchText = findText.toLowerCase().trim();
+    if (searchText) {
+      const newMatches: Match[] = [];
+      editor.getEditorState().read(() => {
+        getAllTextNodes().forEach((node) => {
+          const text = node.getTextContent().toLowerCase();
+          console.log(`Searching in Node: "${text}" for "${searchText}"`); // Log each node's text content and search text
+          let startIndex = 0;
+          while ((startIndex = text.indexOf(searchText, startIndex)) !== -1) {
+            console.log(`Match found at index ${startIndex} in text "${text}"`); // Log each match found
+            newMatches.push({
+              nodeKey: node.getKey(),
+              start: startIndex,
+              end: startIndex + searchText.length,
+              text: node.getTextContent().slice(startIndex, startIndex + searchText.length),
+            });
+            startIndex++;
+          }
+        });
+      });
+      setMatches(newMatches);
+      if (newMatches.length) {
+        setCurrentMatchIndex(0);
+        console.log("Matches found:", newMatches); // Log all matches found
+      } else {
+        console.log("No matches found for:", searchText); // Log if no matches are found
+      }
+    } else {
       setMatches([]);
       setCurrentMatchIndex(-1);
-      return;
     }
-
-    const newMatches: Match[] = [];
-
-    editor.getEditorState().read(() => {
-      const textNodes = getAllTextNodes();
-      
-      textNodes.forEach((node) => {
-        const text = node.getTextContent().toLowerCase();
-        let startIndex = 0;
-        
-        while (true) {
-          const index = text.indexOf(searchText, startIndex);
-          if (index === -1) break;
-
-          newMatches.push({
-            nodeKey: node.getKey(),
-            start: index,
-            end: index + searchText.length,
-            text: node.getTextContent().slice(index, index + searchText.length)
-          });
-
-          startIndex = index + 1;
-        }
-      });
-    });
-
-    setMatches(newMatches);
-    if (newMatches.length > 0 && currentMatchIndex === -1) {
-      setCurrentMatchIndex(0);
-      highlightMatch(newMatches[0]);
-    }
-  }, [editor, findText, getAllTextNodes]);
+  }, [findText, editor, getAllTextNodes]);
 
   // Highlight a specific match
   const highlightMatch = useCallback((match: Match) => {
     editor.update(() => {
-      const selection = $createRangeSelection();
-      const node = editor.getElementByKey(match.nodeKey);
-
-      if (node) {
+      const node = $getNodeByKey(match.nodeKey);
+      if (node instanceof TextNode) {
+        const selection = $createRangeSelection();
         selection.anchor.set(match.nodeKey, match.start, 'text');
         selection.focus.set(match.nodeKey, match.end, 'text');
         $setSelection(selection);
-
-        // Scroll the match into view
-        const element = editor.getElementByKey(match.nodeKey);
-        if (element) {
-          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
       }
     });
   }, [editor]);
@@ -134,8 +121,7 @@ export function FindReplace({ isOpen, onClose }: { isOpen: boolean; onClose: () 
 
     editor.update(() => {
       const match = matches[currentMatchIndex];
-      const node = editor.getElementByKey(match.nodeKey);
-
+      const node = $getNodeByKey(match.nodeKey);
       if (node instanceof TextNode) {
         const text = node.getTextContent();
         const newText = text.slice(0, match.start) + replaceText + text.slice(match.end);
@@ -143,8 +129,7 @@ export function FindReplace({ isOpen, onClose }: { isOpen: boolean; onClose: () 
       }
     });
 
-    // Refresh matches after replacement
-    setTimeout(findAll, 0);
+    setTimeout(findAll, 0); // Refresh matches after replacement
   }, [editor, matches, currentMatchIndex, replaceText, findAll]);
 
   // Replace all matches
@@ -152,9 +137,8 @@ export function FindReplace({ isOpen, onClose }: { isOpen: boolean; onClose: () 
     if (matches.length === 0) return;
 
     editor.update(() => {
-      // Process nodes in reverse order to maintain indices
       [...matches].reverse().forEach(match => {
-        const node = editor.getElementByKey(match.nodeKey);
+        const node = $getNodeByKey(match.nodeKey);
         if (node instanceof TextNode) {
           const text = node.getTextContent();
           const newText = text.slice(0, match.start) + replaceText + text.slice(match.end);
@@ -163,8 +147,7 @@ export function FindReplace({ isOpen, onClose }: { isOpen: boolean; onClose: () 
       });
     });
 
-    // Refresh matches after replacement
-    setTimeout(findAll, 0);
+    setTimeout(findAll, 0); // Refresh matches after replacement
   }, [editor, matches, replaceText, findAll]);
 
   // Update matches when search text changes
