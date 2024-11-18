@@ -1,3 +1,4 @@
+//Users/harithagampala/board-video/components/room.tsx
 "use client";
 
 import { ReactNode } from "react";
@@ -14,9 +15,10 @@ interface RoomProps {
     roomId: string;
     fallback: NonNullable<ReactNode> | null;
     type?: "whiteboard" | "code";
+    history?: boolean;
 }
 
-export const Room = ({ children, roomId, fallback, type = "whiteboard" }: RoomProps) => {
+export const Room = ({ children, roomId, fallback, type = "whiteboard", history = true }: RoomProps) => {
   console.log("[Room] Initializing with:", { roomId, type });
   const getInitialPresence = () => {
     const basePresence = {
@@ -71,7 +73,7 @@ export const Room = ({ children, roomId, fallback, type = "whiteboard" }: RoomPr
                     compiledBy: "",
                     timestamp: Date.now(),
                   }),
-            }}>
+            }} >
             <ClientSideSuspense fallback ={fallback}>
                 {children}
             </ClientSideSuspense>

@@ -1,3 +1,4 @@
+//Users/harithagampala/board-video/types/canvas.ts
 export type Color = {
   r: number;
   g: number;
@@ -15,6 +16,10 @@ export enum LayerType {
   Path,
   Text,
   Note,
+  Association,    // New arrow type
+  Inheritance,    // New arrow type
+  Dependency,     // New arrow type
+  Implementation, // New arrow type
 }
 
 export type RectangleLayer = {
@@ -88,46 +93,51 @@ export enum Side {
 }
 
 export type CanvasState =
-  | {
-      mode: CanvasMode.None;
+    | {
+        mode: CanvasMode.None;
     }
-  | {
-      mode: CanvasMode.SelectionNet;
-      origin: Point;
-      current?: Point;
+    | {
+        mode: CanvasMode.SelectionNet;
+        origin: Point;
+        current?: Point;
     }
-  | {
-      mode: CanvasMode.Translating;
-      current: Point;
+    | {
+        mode: CanvasMode.Translating;
+        current: Point;
     }
-  | {
-      mode: CanvasMode.Inserting;
-      layerType:
-        | LayerType.Ellipse
-        | LayerType.Rectangle
-        | LayerType.Text
-        | LayerType.Note;
+    | {
+        mode: CanvasMode.Inserting;
+        layerType:
+            | LayerType.Ellipse
+            | LayerType.Rectangle
+            | LayerType.Text
+            | LayerType.Note
+            | LayerType.Association
+            | LayerType.Inheritance
+            | LayerType.Dependency
+            | LayerType.Implementation;
     }
-  | {
-      mode: CanvasMode.Pencil;
+    | {
+        mode: CanvasMode.Pencil;
     }
-  | {
-      mode: CanvasMode.Pressing;
-      origin: Point;
+    | {
+        mode: CanvasMode.Pressing;
+        origin: Point;
     }
-  | {
-      mode: CanvasMode.Resizing;
-      initialBounds: XYWH;
-      corner: Side;
+    | {
+        mode: CanvasMode.Resizing;
+        initialBounds: XYWH;
+        corner: Side;
     }
-  | {
-      mode : CanvasMode.Grid;
-      backgroundTemplate ?: string;
-  }
-  | {
-    mode : CanvasMode.Grip;
-    backgroundTemplate ?: string;
-  };
+    | {
+        mode: CanvasMode.Grid;
+        backgroundTemplate?: string;
+    }
+    | {
+        mode: CanvasMode.Grip;
+        backgroundTemplate?: string;
+    };
+
 
 
 export enum CanvasMode {
@@ -142,9 +152,25 @@ export enum CanvasMode {
     Grip,
 }
 
+export type ArrowLayer = {
+  type: LayerType.Association | LayerType.Inheritance | 
+        LayerType.Dependency  | LayerType.Implementation;
+  startX: number;
+  startY: number;
+  endX: number;
+  endY: number;
+  fill: Color;
+  strokeWidth?: number;
+  isDashed?: boolean;
+  value?: string;
+}; 
+
 export type Layer =
   | RectangleLayer
   | EllipseLayer
   | PathLayer
   | TextLayer
-  | NoteLayer;
+  | NoteLayer
+  | ArrowLayer;
+
+
