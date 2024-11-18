@@ -20,7 +20,7 @@ export interface UserAwareness {
 export type AwarenessList = [number, UserAwareness][];
 
 export const client = createClient({
-  throttle: 16,
+  throttle: 100,
   authEndpoint: "/api/liveblocks-auth",
 });
 
@@ -62,6 +62,7 @@ type Storage = {
 type UserMeta = {
   id: string;
   info: {
+    avatar: string | undefined;
     name: string;
     picture?: string;
   };
