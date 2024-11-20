@@ -1,102 +1,117 @@
 "use client";
-
-import { useStorage } from "@liveblocks/react/suspense";
-import { LayerType } from "@/types/canvas";
 import { memo } from "react";
-import { Rectangle } from "./rectangle";
-import { Ellipse } from "./ellipse";
-import { Text } from "./text";
-import { Note } from "./note";
-import { Path } from "./path";
-import  {ArrowTools} from "./arrow-tool";
-import { ArrowRight, ChevronRight, ChevronsRight, ArrowLeftRight, LucideProps } from "lucide-react"; // icons for arrows
-import { colorToCss } from "@/lib/utils";
-import { MouseEventHandler } from "react";
+import { LayerType } from "@/types/canvas";
+import { useStorage } from "@liveblocks/react";
 
 interface LayerPreviewProps {
-    id: string;
-    onLayerPointerDown: (e: React.PointerEvent, layerId: string) => void;
-    selectionColor?: string;
+  id: string;
+  onLayerPointerDown: (e: React.PointerEvent, layerId: string) => void;
+  selectionColor?: string;
 }
-interface ArrowLayerProps {
-    icon: React.ComponentType<LucideProps>;
-    onLayerPointerDown: (e: React.PointerEvent<HTMLDivElement>, id: string) => void;
-    id: string;
-    selectionColor?: string;
-}
+
+const Arrow = ({
+  id,
+  layer,
+  onPointerDown,
+}: {
+  id: string;
+  layer: any;
+  onPointerDown: (e: React.PointerEvent, layerId: string) => void;
+}) => {
+  // Calculate start and end points for the arrow
+  const startPoint = { x: layer.x, y: layer.y };
+  const endPoint = { x: layer.x + layer.width, y: layer.y + layer.height };
+
+  return (
+    <g onPointerDown={(e) => onPointerDown(e, id)}>
+      <defs>
+        <marker
+          id={`arrow-${id}`}
+          viewBox="0 0 10 10"
+          refX="9"
+          refY="5"
+          markerWidth="6"
+          markerHeight="6"
+          orient="auto-start-reverse"
+        >
+          <path d="M 0 0 L 10 5 L 0 10 z" fill={layer.stroke || "#000"} />
+        </marker>
+      </defs>
+      <line
+        x1={startPoint.x}
+        y1={startPoint.y}
+        x2={endPoint.x}
+        y2={endPoint.y}
+        stroke={layer.stroke || "black"}
+        strokeWidth="2"
+        markerEnd={`url(#arrow-${id})`}
+      />
+    </g>
+  );
+};
+
+const Diamond = ({
+  id,
+  layer,
+  onPointerDown,
+}: {
+  id: string;
+  layer: any;
+  onPointerDown: (e: React.PointerEvent, layerId: string) => void;
+}) => {
+  // Calculate center point and size for the diamond
+  const centerX = layer.x + layer.width / 2;
+  const centerY = layer.y + layer.height / 2;
+  const size = Math.min(layer.width, layer.height);
+
+  // Calculate diamond points
+  const points = [
+    `${centerX},${centerY - size/2}`, // top
+    `${centerX + size/2},${centerY}`, // right
+    `${centerX},${centerY + size/2}`, // bottom
+    `${centerX - size/2},${centerY}`  // left
+  ].join(' ');
+
+  return (
+    <g onPointerDown={(e) => onPointerDown(e, id)}>
+      <polygon
+        points={points}
+        fill={layer.fill ? `rgb(${layer.fill.r}, ${layer.fill.g}, ${layer.fill.b})` : 'white'}
+        stroke={layer.stroke || 'black'}
+        strokeWidth="2"
+      />
+    </g>
+  );
+};
 
 export const LayerPreview = memo(
-    ({ id, onLayerPointerDown, selectionColor }: LayerPreviewProps) => {
-        const layer = useStorage((root) => root.layers.get(id));
-        if (!layer) return null;
+  ({ id, onLayerPointerDown }: LayerPreviewProps) => {
+    const layer = useStorage((root) => root.layers.get(id));
 
-        const ArrowLayer = ({ icon: Icon, onLayerPointerDown, id, selectionColor }: ArrowLayerProps) => (
-            <div onPointerDown={(e) => onLayerPointerDown(e, id)}>
-                <Icon size={24} color={selectionColor || "#000"} />
-            </div>
-        );
+    if (!layer) return null;
 
-        switch (layer.type) {
-            case LayerType.Path:
-                return (
-                    <Path
-                        points={layer.points}
-                        onPointerDown={(e) => onLayerPointerDown(e, id)}
-                        x={layer.x}
-                        y={layer.y}
-                        fill={layer.fill ? colorToCss(layer.fill) : "#000"}
-                        stroke={selectionColor}
-                    />
-                );
-            case LayerType.Note:
-                return (
-                    <Note
-                        id={id}
-                        layer={layer}
-                        onPointerDown={onLayerPointerDown}
-                        selectionColor={selectionColor}
-                    />
-                );
-            case LayerType.Text:
-                return (
-                    <Text
-                        id={id}
-                        layer={layer}
-                        onPointerDown={onLayerPointerDown}
-                        selectionColor={selectionColor}
-                    />
-                );
-            case LayerType.Ellipse:
-                return (
-                    <Ellipse
-                        id={id}
-                        layer={layer}
-                        onPointerDown={onLayerPointerDown}
-                        selectionColor={selectionColor}
-                    />
-                );
-            case LayerType.Rectangle:
-                return (
-                    <Rectangle
-                        id={id}
-                        layer={layer}
-                        onPointerDown={onLayerPointerDown}
-                        selectionColor={selectionColor}
-                    />
-                );
-                case LayerType.Association: // Solid Arrow Layer
-                return <ArrowLayer icon={ArrowRight} onLayerPointerDown={onLayerPointerDown} id={id} selectionColor={selectionColor} />;
-            case LayerType.Inheritance: // Dashed Arrow Layer
-                return <ArrowLayer icon={ChevronRight} onLayerPointerDown={onLayerPointerDown} id={id} selectionColor={selectionColor} />;
-            case LayerType.Dependency: // Dotted Arrow Layer
-                return <ArrowLayer icon={ChevronsRight} onLayerPointerDown={onLayerPointerDown} id={id} selectionColor={selectionColor} />;
-            case LayerType.Implementation: // Double Arrow for Implementation
-                return <ArrowLayer icon={ArrowLeftRight} onLayerPointerDown={onLayerPointerDown} id={id} selectionColor={selectionColor} />;
-            default:
-                console.warn(`Unsupported layer type`);
-                return null;
-        }
+    if (layer.type === LayerType.Association) {
+      return (
+        <Arrow
+          id={id}
+          layer={layer}
+          onPointerDown={onLayerPointerDown}
+        />
+      );
     }
+
+    if (layer.type === LayerType.Dependency) {
+      return (
+        <Diamond
+          id={id}
+          layer={layer}
+          onPointerDown={onLayerPointerDown}
+        />
+      );
+    }
+
+    return null;
+  }
 );
 
 LayerPreview.displayName = "LayerPreview";

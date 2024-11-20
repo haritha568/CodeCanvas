@@ -1,3 +1,4 @@
+//Users/harithagampala/board-video/app/board/[boardId]/_components/color-picker.tsx
 "use client";
 
 import { colorToCss, cssToColor } from "@/lib/utils";
