@@ -11,15 +11,13 @@ export type Camera = {
 };
 
 export enum LayerType {
-  Rectangle,
-  Ellipse,
-  Path,
-  Text,
-  Note,
-  Association,    // New arrow type
-  Inheritance,    // New arrow type
-  Dependency,     // New arrow type
-  Implementation, // New arrow type
+  Rectangle = "rectangle",
+  Ellipse = "ellipse",
+  Path = "path",
+  Text = "text",
+  Note = "note",
+  Association = "association",
+  Dependency = "dependency"
 }
 
 export type RectangleLayer = {
@@ -52,6 +50,10 @@ export type PathLayer = {
   points: number[][];
   value?: string;
 };
+export type Coordinates = [x: number, y: number, pressure: number];
+
+export type PencilDraft = Coordinates[];
+
 
 export type TextLayer = {
   type: LayerType.Text;
@@ -91,51 +93,50 @@ export enum Side {
   Left = 4,
   Right = 8,
 }
+export type InsertableLayerType =
+  | LayerType.Rectangle
+  | LayerType.Ellipse
+  | LayerType.Text
+  | LayerType.Note
+  | LayerType.Association
+  | LayerType.Dependency;
 
 export type CanvasState =
-    | {
-        mode: CanvasMode.None;
+  | {
+      mode: CanvasMode.None;
     }
-    | {
-        mode: CanvasMode.SelectionNet;
-        origin: Point;
-        current?: Point;
+  | {
+      mode: CanvasMode.SelectionNet;
+      origin: Point;
+      current?: Point;
     }
-    | {
-        mode: CanvasMode.Translating;
-        current: Point;
+  | {
+      mode: CanvasMode.Translating;
+      current: Point;
     }
-    | {
-        mode: CanvasMode.Inserting;
-        layerType:
-            | LayerType.Ellipse
-            | LayerType.Rectangle
-            | LayerType.Text
-            | LayerType.Note
-            | LayerType.Association
-            | LayerType.Inheritance
-            | LayerType.Dependency
-            | LayerType.Implementation;
+  | {
+      mode: CanvasMode.Inserting;
+      layerType: InsertableLayerType;
     }
-    | {
-        mode: CanvasMode.Pencil;
+  | {
+      mode: CanvasMode.Pencil;
     }
-    | {
-        mode: CanvasMode.Pressing;
-        origin: Point;
+  | {
+      mode: CanvasMode.Pressing;
+      origin: Point;
     }
-    | {
-        mode: CanvasMode.Resizing;
-        initialBounds: XYWH;
-        corner: Side;
+  | {
+      mode: CanvasMode.Resizing;
+      initialBounds: XYWH;
+      corner: Side;
     }
-    | {
-        mode: CanvasMode.Grid;
-        backgroundTemplate?: string;
+  | {
+      mode: CanvasMode.Grid;
+      backgroundTemplate?: string;
     }
-    | {
-        mode: CanvasMode.Grip;
-        backgroundTemplate?: string;
+  | {
+      mode: CanvasMode.Grip;
+      backgroundTemplate?: string;
     };
 
 
@@ -153,17 +154,27 @@ export enum CanvasMode {
 }
 
 export type ArrowLayer = {
-  type: LayerType.Association | LayerType.Inheritance | 
-        LayerType.Dependency  | LayerType.Implementation;
-  startX: number;
-  startY: number;
-  endX: number;
-  endY: number;
-  fill: Color;
-  strokeWidth?: number;
-  isDashed?: boolean;
+  type: LayerType.Association;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  stroke: string;
   value?: string;
-}; 
+  fill: Color;
+};
+
+export type DiamondLayer = {
+  type: LayerType.Dependency;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  stroke: string;
+  value?: string;
+  fill: Color;
+};
+
 
 export type Layer =
   | RectangleLayer
@@ -171,6 +182,7 @@ export type Layer =
   | PathLayer
   | TextLayer
   | NoteLayer
-  | ArrowLayer;
+  | ArrowLayer
+  | DiamondLayer;
 
 

@@ -1,5 +1,6 @@
+//Users/harithagampala/board-video/app/board/[boardId]/_components/canvas.tsx
 "use client";
-
+import AutoDrawSuggestions from './auto-draw-suggestions';
 import Info from "./info";
 import { Participants } from "./participants";
 import Toolbar from "./toolbar";
@@ -21,6 +22,8 @@ import {
     Side,
     XYWH,
     Layer,
+    PencilDraft,
+    Coordinates,
 } from "@/types/canvas";
 import {
     useHistory,
@@ -52,6 +55,7 @@ import { toPng } from "html-to-image";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
+//import { DiagramGenerator } from './diagram-generator';
 
 const MAX_LAYERS = 100;
 const SELECTION_NET_THRESHOLD = 5;
@@ -71,6 +75,7 @@ export const Canvas = ({ boardId }: CanvasProps) => {
     });
 
     const [camera, setCamera] = useState<Camera>({ x: 0, y: 0 });
+    const [currentPoints, setCurrentPoints] = useState<PencilDraft | null>(null);
 
     const resetCamera = useCallback(() => {
         setCamera({ x: 0, y: 0 });
@@ -193,33 +198,154 @@ export const Canvas = ({ boardId }: CanvasProps) => {
     const continueDrawing = useMutation(
         ({ setMyPresence, self }, point: Point, e: React.PointerEvent) => {
             const { pencilDraft } = self.presence;
-
+    
             if (
                 canvasState.mode !== CanvasMode.Pencil ||
-                e.buttons != 1 ||
+                e.buttons !== 1 ||
                 pencilDraft == null
             ) {
                 return;
             }
-
+    
+            const newPoint: Coordinates = [point.x, point.y, e.pressure];
+            const newDraft: Coordinates[] = [...pencilDraft, newPoint];
+    
             setMyPresence({
                 cursor: point,
-                pencilDraft:
-                    pencilDraft.length === 1 &&
-                    pencilDraft[0][0] === point.x &&
-                    pencilDraft[0][1] === point.y
-                        ? pencilDraft
-                        : [...pencilDraft, [point.x, point.y, e.pressure]],
+                pencilDraft: newDraft,
             });
         },
         [canvasState.mode]
     );
+    
+    const startDrawing = useMutation(
+        ({ setMyPresence }, point: Point, pressure: number) => {
+            const newPoint: Coordinates = [point.x, point.y, pressure];
+            setMyPresence({
+                pencilDraft: [newPoint],
+                pencilColor: lastUsedColor,
+            });
+            setCanvasState({ mode: CanvasMode.Pencil });
+        },
+        [lastUsedColor]
+    );    
+    
 
+    const handleShapeSelection = useMutation(
+        ({ storage, self, setMyPresence }, shapeType: string) => {
+            const liveLayers = storage.get("layers");
+            const liveLayerIds = storage.get("layerIds");
+            
+            if (liveLayers.size >= MAX_LAYERS) {
+                return;
+            }
+    
+            const points = self.presence.pencilDraft;
+            if (!points || points.length < 2) return;
+    
+            // Calculate bounds of the drawn shape
+            const [minX, maxX, minY, maxY] = points.reduce(
+                ([minX, maxX, minY, maxY], [x, y]) => [
+                    Math.min(minX, x),
+                    Math.max(maxX, x),
+                    Math.min(minY, y),
+                    Math.max(maxY, y),
+                ],
+                [Infinity, -Infinity, Infinity, -Infinity]
+            );
+    
+            const width = maxX - minX;
+            const height = maxY - minY;
+            const centerX = minX + width / 2;
+            const centerY = minY + height / 2;
+    
+            // Create new layer based on recognized shape
+            const layerId = nanoid();
+            
+            // Determine shape type and create appropriate layer
+            let layerData: any = {
+                type: LayerType.Rectangle, // default fallback
+                x: centerX - width / 2,
+                y: centerY - height / 2,
+                height: height,
+                width: width,
+                fill: lastUsedColor,
+            };
+    
+            // Adjust layer properties based on shape type
+            switch (shapeType) {
+                case 'circle':
+                    layerData.type = LayerType.Ellipse;
+                    // Make it a perfect circle by using the larger dimension
+                    const size = Math.max(width, height);
+                    layerData.width = size;
+                    layerData.height = size;
+                    break;
+                case 'square':
+                    layerData.type = LayerType.Rectangle;
+                    // Make it a perfect square by using the larger dimension
+                    const squareSize = Math.max(width, height);
+                    layerData.width = squareSize;
+                    layerData.height = squareSize;
+                    break;
+                case 'Ellipse':
+                    layerData.type = LayerType.Ellipse;
+                    break;
+            }
+    
+            const layer = new LiveObject(layerData);
+    
+            liveLayerIds.push(layerId);
+            liveLayers.set(layerId, layer);
+    
+            // Clear the pencil draft
+            setMyPresence({ 
+                pencilDraft: null,
+                selection: [layerId]
+            }, { addToHistory: true });
+            
+            setCurrentPoints(null);
+            setCanvasState({ mode: CanvasMode.None });
+        },
+        [lastUsedColor]
+    );
+
+    const keepFreehandDrawing = useMutation(
+        ({ storage, self, setMyPresence }) => {
+            const liveLayers = storage.get("layers");
+            const liveLayerIds = storage.get("layerIds");
+            const { pencilDraft } = self.presence;
+    
+            if (!pencilDraft || pencilDraft.length < 2) {
+                setMyPresence({ pencilDraft: null });
+                return;
+            }
+    
+            // Create a path layer from the freehand drawing
+            const id = nanoid();
+            liveLayers.set(
+                id,
+                new LiveObject(penPointsToPathLayer(pencilDraft, lastUsedColor))
+            );
+    
+            liveLayerIds.push(id);
+            
+            // Clear the pencil draft
+            setMyPresence({ 
+                pencilDraft: null,
+                selection: [id]
+            }, { addToHistory: true });
+            
+            setCanvasState({ mode: CanvasMode.None });
+        },
+        [lastUsedColor]
+    );
+    
     const insertPath = useMutation(
         ({ storage, self, setMyPresence }) => {
             const liveLayers = storage.get("layers");
             const { pencilDraft } = self.presence;
-
+    
             if (
                 pencilDraft == null ||
                 pencilDraft.length < 2 ||
@@ -228,29 +354,19 @@ export const Canvas = ({ boardId }: CanvasProps) => {
                 setMyPresence({ pencilDraft: null });
                 return;
             }
-
+    
             const id = nanoid();
             liveLayers.set(
                 id,
                 new LiveObject(penPointsToPathLayer(pencilDraft, lastUsedColor))
             );
-
+    
             const liveLayerIds = storage.get("layerIds");
             liveLayerIds.push(id);
-
+    
             setMyPresence({ pencilDraft: null });
             setCanvasState({
-                mode: CanvasMode.Pencil,
-            });
-        },
-        [lastUsedColor]
-    );
-
-    const startDrawing = useMutation(
-        ({ setMyPresence }, point: Point, pressure: number) => {
-            setMyPresence({
-                pencilDraft: [[point.x, point.y, pressure]],
-                pencilColor: lastUsedColor,
+                mode: CanvasMode.None,
             });
         },
         [lastUsedColor]
@@ -571,9 +687,19 @@ export const Canvas = ({ boardId }: CanvasProps) => {
                 toggleGrid={toggleGrid}
                 toggleDots={toggleDots}
             />
+          {/*  <DiagramGenerator setCanvasState={setCanvasState}/> */}
             {camera.x != 0 && camera.y != 0 && (
                 <ResetCamera resetCamera={resetCamera} />
             )}
+            {/* Add AutoDraw suggestions here, before the SVG */}
+            {canvasState.mode === CanvasMode.Pencil && pencilDraft && pencilDraft.length > 0 && (
+    <AutoDrawSuggestions
+        points={pencilDraft}
+        onSelectShape={handleShapeSelection}
+        camera={camera}
+        onKeepFreehand={keepFreehandDrawing}
+    />
+)}
             <SelectionTools
                 onDuplicate={duplicateLayers}
                 camera={camera}
@@ -671,14 +797,15 @@ export const Canvas = ({ boardId }: CanvasProps) => {
                             />
                         )}
                     <CursorsPresence />
-                    {pencilDraft && pencilDraft.length > 0 && (
-                        <Path
-                            points={pencilDraft}
-                            fill={colorToCss(lastUsedColor)}
-                            x={0}
-                            y={0}
-                        />
-                    )}
+                    {/* Update the pencil draft rendering */}
+                {canvasState.mode === CanvasMode.Pencil && pencilDraft && pencilDraft.length > 0 && (
+                    <Path
+                        points={pencilDraft}
+                        fill={colorToCss(lastUsedColor)}
+                        x={0}
+                        y={0}
+                    />
+                )}
                 </g>
             </svg>
         </main>
