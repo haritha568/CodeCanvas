@@ -4,14 +4,14 @@ import {
   $createTextNode,
   TextNode,
   $createParagraphNode,
-  TextFormatType,
   $getSelection,
   $isRangeSelection,
   RangeSelection,
   LexicalNode,
-  LexicalEditor
+  LexicalEditor,
+  $isTextNode
 } from "lexical";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
 import {
   autoUpdate,
@@ -21,178 +21,203 @@ import {
   useFloating,
 } from "@floating-ui/react-dom";
 
-interface SuggestionsMenuProps {
-    suggestions: {
-      words: string[];
-      sentences: string[];
-    };
-    position: { x: number; y: number } | null;
-    onSelect: (text: string, type: 'word' | 'sentence') => void;
-    onClose: () => void;
+// Get word suggestions from Datamuse
+const getWordSuggestions = async (word: string): Promise<string[]> => {
+  console.log('Fetching suggestions for word:', word);
+  
+  if (!word || word.length < 2) return [];
+
+  try {
+    // Fetch similar sounding words and spelled-like words
+    const [soundsLikeRes, spelledLikeRes] = await Promise.all([
+      fetch(`https://api.datamuse.com/words?sl=${encodeURIComponent(word)}`),
+      fetch(`https://api.datamuse.com/words?sp=${encodeURIComponent(word)}*&max=5`)
+    ]);
+
+    const [soundsLikeWords, spelledLikeWords] = await Promise.all([
+      soundsLikeRes.json(),
+      spelledLikeRes.json()
+    ]);
+
+    // Combine and deduplicate suggestions
+    const suggestions = [...new Set([
+      ...soundsLikeWords.map((item: { word: string }) => item.word),
+      ...spelledLikeWords.map((item: { word: string }) => item.word)
+    ])].filter(suggestion => suggestion !== word);
+
+    console.log('Word suggestions:', suggestions);
+    return suggestions;
+  } catch (error) {
+    console.error('Error fetching word suggestions:', error);
+    return [];
   }
-  
-  interface TextSuggestion {
-    type: 'word' | 'sentence';
-    text: string;
-  }
+};
 
-  export function SpellCheckPlugin() {
-    const [editor] = useLexicalComposerContext();
-    const [misspelledWords, setMisspelledWords] = useState<Set<string>>(new Set());
-    const [suggestions, setSuggestions] = useState<{ words: string[], sentences: string[] }>({
-      words: [],
-      sentences: []
-    });
-    const [menuPosition, setMenuPosition] = useState<{ x: number; y: number } | null>(null);
-    const [selectedWord, setSelectedWord] = useState<string | null>(null);
+// Improved next words suggestion function
+const getNextWords = async (text: string): Promise<string[]> => {
+  console.log('Fetching next words for:', text);
   
-    // Helper function to get DOM range from Lexical selection
-    const getDOMRangeFromSelection = (
-      editor: LexicalEditor,
-      selection: RangeSelection
-    ): Range | null => {
-      const anchor = selection.anchor;
-      const focus = selection.focus;
-      const anchorNode = editor.getElementByKey(anchor.key);
-      const focusNode = editor.getElementByKey(focus.key);
-      
-      if (!anchorNode || !focusNode) return null;
-  
-      const range = document.createRange();
-      let anchorDOM: Node | null = anchorNode;
-      let focusDOM: Node | null = focusNode;
-  
-      if ($isTextNode(anchor.getNode())) {
-        anchorDOM = anchorNode.firstChild || anchorNode;
-      }
-      if ($isTextNode(focus.getNode())) {
-        focusDOM = focusNode.firstChild || focusNode;
-      }
-  
-      if (!anchorDOM || !focusDOM) return null;
-  
-      try {
-        range.setStart(anchorDOM, anchor.offset);
-        range.setEnd(focusDOM, focus.offset);
-        return range;
-      } catch (error) {
-        console.error('Error creating range:', error);
-        return null;
-      }
-    };
+  if (!text) return [];
 
-  // Function to get position from DOM range
-  const getPositionFromRange = (range: Range): { x: number; y: number } | null => {
-    const rect = range.getBoundingClientRect();
-    if (!rect) return null;
+  try {
+    // Get the last few words for context
+    const words = text.trim().split(/\s+/);
+    let contextWords = '';
     
-    return {
-      x: rect.right + window.scrollX,
-      y: rect.bottom + window.scrollY
-    };
-  };
-
-  // Function to check spelling
-  const checkSpelling = (word: string): boolean => {
-    if (!word || word.length < 2) return false;
-    
-    const textarea = document.createElement('textarea');
-    textarea.style.display = 'none';
-    document.body.appendChild(textarea);
-    textarea.value = word;
-    const misspelled = textarea.spellcheck && !textarea.checkValidity();
-    document.body.removeChild(textarea);
-    return misspelled;
-  };
-
-  // Function to get text suggestions
-  const getSuggestions = async (text: string): Promise<{ words: string[], sentences: string[] }> => {
-    try {
-      // Get word suggestions for the last word
-      const lastWord = text.split(/\s+/).pop() || '';
-      const wordResponse = await fetch(`https://api.datamuse.com/words?sp=${lastWord}&max=5`);
-      const wordData = await wordResponse.json();
-      const words = wordData.map((item: { word: string }) => item.word);
-
-      // Get sentence completions
-      const sentences = await getSentenceCompletions(text);
-
-      return {
-        words: words || [],
-        sentences: sentences || []
-      };
-    } catch (error) {
-      console.error('Error fetching suggestions:', error);
-      return {
-        words: [],
-        sentences: []
-      };
+    // Get last 2-3 words for better context
+    if (words.length >= 3) {
+      contextWords = words.slice(-3).join(' ');
+    } else if (words.length >= 2) {
+      contextWords = words.slice(-2).join(' ');
+    } else {
+      contextWords = words[0] || '';
     }
-  };
 
-  // Function to get sentence completions
-  const getSentenceCompletions = async (text: string): Promise<string[]> => {
-    // This is a mock implementation - replace with your actual API call
-    const completions = [
-      text + " is a great example of",
-      text + " can be used to demonstrate",
-      text + " shows how we can"
-    ];
-    return completions;
-  };
+    // Multiple API calls for better suggestions
+    const [followingWords, relatedWords, triggerWords] = await Promise.all([
+      // Words that frequently follow
+      fetch(`https://api.datamuse.com/words?lc=${encodeURIComponent(contextWords)}&max=3`),
+      // Related words
+      fetch(`https://api.datamuse.com/words?rel_trg=${encodeURIComponent(words[words.length - 1])}&max=3`),
+      // Words triggered by context
+      fetch(`https://api.datamuse.com/words?ml=${encodeURIComponent(words[words.length - 1])}&max=3`)
+    ]);
 
-  // Handle text selection from suggestions
-  const handleTextSelection = (selectedText: string, type: 'word' | 'sentence') => {
-    editor.update(() => {
-      const selection = $getSelection();
-      
-      if (!selection || !$isRangeSelection(selection)) return;
+    const [followingData, relatedData, triggerData] = await Promise.all([
+      followingWords.json(),
+      relatedWords.json(),
+      triggerWords.json()
+    ]);
 
-      if (type === 'word' && selectedWord) {
-        const nodes = selection.getNodes();
-        nodes.forEach((node: LexicalNode) => {
-          if ($isTextNode(node) && node.getTextContent() === selectedWord) {
-            node.setTextContent(selectedText);
-          }
-        });
-      } else if (type === 'sentence') {
-        const paragraph = $createParagraphNode();
-        const textNode = $createTextNode(selectedText);
-        paragraph.append(textNode);
-        selection.insertNodes([paragraph]);
-      }
+    console.log('API responses:', {
+      following: followingData,
+      related: relatedData,
+      trigger: triggerData
     });
 
-    setSelectedWord(null);
-    setSuggestions({ words: [], sentences: [] });
-    setMenuPosition(null);
-  };
+    // Combine suggestions from different sources
+    const nextWordSuggestions = [
+      ...followingData.map((item: { word: string }) => item.word),
+      ...relatedData.map((item: { word: string }) => item.word),
+      ...triggerData.map((item: { word: string }) => item.word)
+    ];
 
-  // Add styles for misspelled words
-  useEffect(() => {
-    const style = document.createElement('style');
-    style.textContent = `
-      .misspelled {
-        text-decoration: underline;
-        text-decoration-style: wavy;
-        text-decoration-color: red;
-        cursor: pointer;
-      }
-      .suggestion-active {
-        background-color: rgba(59, 130, 246, 0.1);
-      }
-    `;
-    document.head.appendChild(style);
-    return () => {
-      document.head.removeChild(style);
+    // Remove duplicates and format complete sentences
+    const uniqueNextWords = [...new Set(nextWordSuggestions)];
+    
+    // Format suggestions as complete phrases
+    const completeSuggestions = uniqueNextWords.map(word => {
+      // Keep original text and add the suggestion
+      const originalText = text.trim();
+      return `${originalText} ${word}`;
+    });
+
+    console.log('Complete suggestions:', completeSuggestions);
+    return completeSuggestions;
+  } catch (error) {
+    console.error('Error fetching next words:', error);
+    return [];
+  }
+};
+
+export function SpellCheckPlugin() {
+  const [editor] = useLexicalComposerContext();
+  const [suggestions, setSuggestions] = useState<{
+    words: string[];
+    sentences: string[];
+  }>({ words: [], sentences: [] });
+  const [menuPosition, setMenuPosition] = useState<{ x: number; y: number } | null>(null);
+  const [selectedWord, setSelectedWord] = useState<string | null>(null);
+  const [lastProcessedText, setLastProcessedText] = useState<string>("");
+
+  // Get current cursor position
+  const getTextCursorPosition = useCallback((): { x: number; y: number } | null => {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) return null;
+
+    const range = selection.getRangeAt(0);
+    const rect = range.getBoundingClientRect();
+    
+    if (rect.width === 0 && rect.height === 0) return null;
+
+    return {
+      x: rect.left + window.scrollX,
+      y: rect.bottom + window.scrollY
     };
   }, []);
 
-  // Handle text input and suggestions
+  // Handle text updates and fetch suggestions
+  const updateSuggestions = useCallback(async (text: string) => {
+    console.log('Updating suggestions for text:', text);
+    
+    // Avoid processing the same text multiple times
+    if (!text || text === lastProcessedText) return;
+    setLastProcessedText(text);
+
+    const words = text.split(/\s+/);
+    const lastWord = words[words.length - 1];
+
+    try {
+      // Get both word and sentence suggestions
+      const [wordSuggestions, nextWords] = await Promise.all([
+        lastWord?.length >= 3 ? getWordSuggestions(lastWord) : Promise.resolve([]),
+        text.length >= 3 ? getNextWords(text) : Promise.resolve([])
+      ]);
+
+      // Only update state if we have suggestions
+      if (wordSuggestions.length > 0 || nextWords.length > 0) {
+        setSuggestions({
+          words: wordSuggestions,
+          sentences: nextWords
+        });
+        setSelectedWord(lastWord);
+
+        const position = getTextCursorPosition();
+        setMenuPosition(position);
+      } else {
+        setSuggestions({ words: [], sentences: [] });
+        setMenuPosition(null);
+      }
+    } catch (error) {
+      console.error('Error updating suggestions:', error);
+    }
+  }, [getTextCursorPosition, lastProcessedText]);
+
+
+  // Handle selection of a suggestion
+  const handleSuggestionSelect = useCallback((suggestion: string, type: 'word' | 'sentence') => {
+    editor.update(() => {
+      const selection = $getSelection();
+      if (!selection || !$isRangeSelection(selection)) return;
+
+      if (type === 'word' && selectedWord) {
+        // Replace the last word with the selected suggestion
+        const node = selection.anchor.getNode();
+        if ($isTextNode(node)) {
+          const text = node.getTextContent();
+          const newText = text.replace(selectedWord, suggestion);
+          node.setTextContent(newText);
+        }
+      } else if (type === 'sentence') {
+        // Replace entire text with the selected suggestion
+        const node = selection.anchor.getNode();
+        if ($isTextNode(node)) {
+          node.setTextContent(suggestion);
+        }
+      }
+    });
+
+    // Clear suggestions after selection
+    setSuggestions({ words: [], sentences: [] });
+    setMenuPosition(null);
+    setSelectedWord(null);
+  }, [editor, selectedWord]);
+
+  // Set up editor listener
   useEffect(() => {
     let timeoutId: NodeJS.Timeout;
 
-    const handleTextInput = async () => {
+    const handleTextChange = () => {
       editor.update(() => {
         const selection = $getSelection();
         if (!selection || !$isRangeSelection(selection)) return;
@@ -201,47 +226,33 @@ interface SuggestionsMenuProps {
         if (!$isTextNode(node)) return;
 
         const text = node.getTextContent();
-        const lastWord = text.split(/\s+/).pop() || '';
-
-        if (checkSpelling(lastWord) || text.length > 10) {
-          clearTimeout(timeoutId);
-          timeoutId = setTimeout(async () => {
-            const newSuggestions = await getSuggestions(text);
-            setSuggestions(newSuggestions);
-            
-            const range = getDOMRangeFromSelection(editor, selection);
-            if (range) {
-              const position = getPositionFromRange(range);
-              if (position) {
-                setMenuPosition(position);
-              }
-            }
-          }, 500);
-        } else {
-          setMenuPosition(null);
-          setSuggestions({ words: [], sentences: [] });
-        }
+        
+        // Debounce the suggestions update
+        clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => {
+          updateSuggestions(text);
+        }, 300);
       });
     };
 
-    const removeUpdateListener = editor.registerUpdateListener(handleTextInput);
-    
+    const removeListener = editor.registerUpdateListener(handleTextChange);
+
     return () => {
-      removeUpdateListener();
+      removeListener();
       clearTimeout(timeoutId);
     };
-  }, [editor]);
+  }, [editor, updateSuggestions]);
 
   // Render suggestions menu
   return menuPosition && (suggestions.words.length > 0 || suggestions.sentences.length > 0) ? (
     <SuggestionsMenu
       suggestions={suggestions}
       position={menuPosition}
-      onSelect={handleTextSelection}
+      onSelect={handleSuggestionSelect}
       onClose={() => {
-        setSelectedWord(null);
         setSuggestions({ words: [], sentences: [] });
         setMenuPosition(null);
+        setSelectedWord(null);
       }}
     />
   ) : null;
@@ -253,11 +264,13 @@ function SuggestionsMenu({
   position,
   onSelect,
   onClose
-}: SuggestionsMenuProps) {
-  const {
-    refs,
-    floatingStyles,
-  } = useFloating({
+}: {
+  suggestions: { words: string[]; sentences: string[] };
+  position: { x: number; y: number };
+  onSelect: (text: string, type: 'word' | 'sentence') => void;
+  onClose: () => void;
+}) {
+  const { refs, floatingStyles } = useFloating({
     placement: "bottom-start",
     middleware: [offset(6), flip(), shift()],
     whileElementsMounted: autoUpdate,
@@ -292,66 +305,48 @@ function SuggestionsMenu({
       style={{
         ...floatingStyles,
         position: "absolute",
-        top: position?.y,
-        left: position?.x,
+        top: position.y,
+        left: position.x,
+        zIndex: 9999,
       }}
-      className="suggestions-menu z-50 min-w-[300px] max-w-[400px] overflow-hidden rounded-md border border-border/80 bg-popover p-1 text-popover-foreground shadow-md"
+      className="bg-white rounded-lg shadow-lg border border-gray-200 p-2 min-w-[200px] max-w-[300px]"
     >
-      <div className="flex flex-col gap-2">
-        {suggestions.words.length > 0 && (
-          <div>
-            <div className="px-2 py-1 text-xs font-semibold text-muted-foreground">
-              Word Suggestions
-            </div>
-            <div className="flex flex-col gap-1">
-              {suggestions.words.map((word, index) => (
-                <button
-                  key={`word-${index}`}
-                  onClick={() => onSelect(word, 'word')}
-                  className="flex w-full items-center rounded-sm px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground outline-none"
-                >
-                  {word}
-                </button>
-              ))}
-            </div>
+      {suggestions.words.length > 0 && (
+        <div className="mb-2">
+          <div className="text-xs font-semibold text-gray-500 mb-1">Word Suggestions</div>
+          <div className="space-y-1">
+            {suggestions.words.map((word, index) => (
+              <button
+                key={`word-${index}`}
+                onClick={() => onSelect(word, 'word')}
+                className="w-full text-left px-2 py-1 text-sm hover:bg-gray-100 rounded"
+              >
+                {word}
+              </button>
+            ))}
           </div>
-        )}
-        
-        {suggestions.sentences.length > 0 && (
-          <div>
-            <div className="px-2 py-1 text-xs font-semibold text-muted-foreground">
-              Complete Sentence
-            </div>
-            <div className="flex flex-col gap-1">
-              {suggestions.sentences.map((sentence, index) => (
-                <button
-                  key={`sentence-${index}`}
-                  onClick={() => onSelect(sentence, 'sentence')}
-                  className="flex w-full items-center rounded-sm px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground outline-none text-left"
-                >
-                  {sentence}
-                </button>
-              ))}
-            </div>
+        </div>
+      )}
+      
+      {suggestions.sentences.length > 0 && (
+        <div>
+          <div className="text-xs font-semibold text-gray-500 mb-1">Complete With</div>
+          <div className="space-y-1">
+            {suggestions.sentences.map((sentence, index) => (
+              <button
+                key={`sentence-${index}`}
+                onClick={() => onSelect(sentence, 'sentence')}
+                className="w-full text-left px-2 py-1 text-sm hover:bg-gray-100 rounded"
+              >
+                {sentence}
+              </button>
+            ))}
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>,
     document.body
   );
 }
 
-// Type guard for TextNode
-function $isTextNode(node: LexicalNode): node is TextNode {
-  return node instanceof TextNode;
-}
-
-export function Placeholder() {
-    return (
-      <div className="pointer-events-none absolute top-[25px] left-[100px] text-sm text-muted-foreground">
-        Start typing...
-      </div>
-    );
-  }
-  
-  export default SpellCheckPlugin;
+export default SpellCheckPlugin;
