@@ -8,3 +8,5 @@ First, run the development server:
 npm run dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+
+Deployed link : (http://18.219.202.24:3001) open in browser to see the result.
